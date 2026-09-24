@@ -226,6 +226,19 @@ async function handler(request, ctx) {
       await db.collection('bookings').insertOne(booking)
       return NextResponse.json({ booking })
     }
+    if (route === '/auth/google' && method === 'POST') {
+      const { credential } = await request.json()
+      if (!credential) return NextResponse.json({ error:'Missing credential' }, { status:400 })
+      // Google verifies the ID token's signature and expiry for us.
+      const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`)
+      const info = await res.json()
+      if (!res.ok || info.aud !== process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || info.email_verified !== 'true') {
+        return NextResponse.json({ error:'Invalid Google sign-in' }, { status:401 })
+      }
+      return NextResponse.json({
+        user: { id: info.sub, name: info.name || '', email: info.email, picture: info.picture || '', provider: 'google' },
+      })
+    }
     if (route === '/bookings' && method === 'GET') {
       const db = await getDb()
       const bookings = await db.collection('bookings').find({}, { projection:{ _id:0 } }).sort({ createdAt:-1 }).limit(50).toArray()
